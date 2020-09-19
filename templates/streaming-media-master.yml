@@ -1,0 +1,159 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Create a nested stack within another stack to organize infrastructure resources
+Parameters:
+  GitHubUser:
+    Description: Enter GitHub username of the repository owner
+    Type: String
+  GitHubRepoName:
+    Description: Enter the repository name that should be monitored for changes
+    Type: String
+  SourceRepoBranch:
+    Description: Enter the branch name to be monitored
+    Type: String
+  ReleaseBranch:
+    Description: >-
+      Enter the release branch name. On successfull build, above branch will be
+      merged into this branch.
+    Type: String
+  GitHubOAuthToken:
+    Description: >-
+      Create a token with 'repo' and 'admin:repo_hook' permissions here
+      https://github.com/settings/tokens
+    Type: String
+    NoEcho: 'true'
+  S3BucketName:
+    AllowedPattern: '^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$'
+    ConstraintDescription: >-
+      S3 bucket name can include numbers, lowercase letters, uppercase
+      letters, and hyphens (-). It cannot start or end with a hyphen (-).
+    Default: aws-molpadia
+    Description: >-
+      Enter the S3 bucket name which can include numbers, lowercase letters,
+      uppercase letters, and hyphens (-). It cannot start or end with a hyphen (-).
+    Type: String
+  S3BucketRegion:
+    Default: 'ap-northeast-1'
+    Description: >-
+      The AWS Region where the S3 bucket (S3BucketName) is hosted.
+      Specify this value when using your own bucket.
+    Type: String
+  S3KeyPrefix:
+    AllowedPattern: '^[0-9a-zA-Z-/]*$'
+    ConstraintDescription: >-
+      S3 key prefix can include numbers, lowercase letters, uppercase
+      letters, hyphens (-).
+    Default: component-streaming-media-webapp
+    Description: >-
+      S3 key prefix for the molpadia assets. S3 key prefix can
+      include numbers, lowercase letters, uppercase letters, hyphens (-).
+    Type: String
+Metadata:
+  'AWS::CloudFormation::Interface':
+    ParameterGroups:
+      - Label:
+          default: GitHub Configuration
+        Parameters:
+          - GitHubUser
+          - GitHubRepoName
+          - SourceRepoBranch
+          - ReleaseBranch
+          - GitHubOAuthToken
+      - Label:
+          default: AWS Configuration
+        Parameters:
+          - S3BucketName
+          - S3BucketRegion
+          - S3KeyPrefix
+    ParameterLabels:
+      GitHubUser:
+        default: Repository owner
+      GitHubRepoName:
+        default: Repository name
+      SourceRepoBranch:
+        default: Source branch
+      ReleaseBranch:
+        default: Release branch
+      GitHubOAuthToken:
+        default: OAuth2 token
+      S3BucketName:
+        default: S3 bucket name
+      S3BucketRegion:
+        default: S3 bucket region
+      S3KeyPrefix:
+        default: S3 key prefix
+
+Conditions:
+  UsingDefaultBucket: !Equals [!Ref S3BucketName, 'aws-molpadia']
+
+Resources:
+  ArtifactBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      AccessControl: Private
+      LifecycleConfiguration:
+        Rules:
+          - NoncurrentVersionExpirationInDays: 30
+            Status: Enabled
+      VersioningConfiguration:
+        Status: Enabled
+  IAMRoleStack:
+    Type: 'AWS::CloudFormation::Stack'
+    DependsOn:
+      - ArtifactBucket
+    Properties:
+      TemplateURL:
+        !Sub
+          - 'https://${S3Bucket}.s3.${AWS::URLSuffix}/${S3KeyPrefix}/templates/iam-roles.yml'
+          - S3Bucket: !If [UsingDefaultBucket, !Sub '${S3BucketName}-${AWS::Region}', !Ref S3BucketName]
+      Parameters:
+        ArtifactBucket: !Ref ArtifactBucket
+  CodePipelineStack:
+    Type: 'AWS::CloudFormation::Stack'
+    DependsOn:
+      - ArtifactBucket
+      - IAMRoleStack
+    Properties:
+      TemplateURL:
+        !Sub
+          - 'https://${S3Bucket}.s3.${AWS::URLSuffix}/${S3KeyPrefix}/templates/ci-pipeline.yml'
+          - S3Bucket: !If [UsingDefaultBucket, !Sub '${S3BucketName}-${AWS::Region}', !Ref S3BucketName]
+      Parameters:
+        GitHubUser: !Ref GitHubUser
+        GitHubRepoName: !Ref GitHubRepoName
+        SourceRepoBranch: !Ref SourceRepoBranch
+        ReleaseBranch: !Ref ReleaseBranch
+        GitHubOAuthToken: !Ref GitHubOAuthToken
+        ArtifactBucket: !Ref ArtifactBucket
+        # GitMergeLambda: !Ref GitMergeLambda
+        CodePipelineRoleArn: !GetAtt
+          - IAMRoleStack
+          - Outputs.CodePipelineRoleArn
+        CodeBuildRoleArn: !GetAtt
+          - IAMRoleStack
+          - Outputs.CodeBuildRoleArn
+  EmptyBucketLambdaStack:
+    Type: 'AWS::CloudFormation::Stack'
+    DependsOn:
+      - ArtifactBucket
+    Properties:
+      TemplateURL:
+        !Sub
+          - 'https://${S3Bucket}.s3.${AWS::URLSuffix}/${S3KeyPrefix}/templates/empty-bucket.yml'
+          - S3Bucket: !If [UsingDefaultBucket, !Sub '${S3BucketName}-${AWS::Region}', !Ref S3BucketName]
+      Parameters:
+        BucketName: !Ref ArtifactBucket
+
+Outputs:
+  CodePipelineURL:
+    Description: The URL of the created Pipeline
+    Value: !Sub
+      - >-
+        https://${AWS::Region}.console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${CodePipelineName}
+      - CodePipelineName: !GetAtt
+          - CodePipelineStack
+          - Outputs.CodePipelineName
+  TaskCatReports:
+    Description: Path to the TaskCat report. Each report is named as CODEBUILD_BUILD_ID.zip
+    Value: !Sub 's3://${ArtifactBucket}/taskcat_reports/'
