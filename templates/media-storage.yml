@@ -1,0 +1,146 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  Create a file storage stack for streaming media
+
+Parameters:
+  MediaBucketName:
+    AllowedPattern: '^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$'
+    ConstraintDescription: >-
+      S3 bucket name can include numbers, lowercase letters, uppercase
+      letters, and hyphens (-). It cannot start or end with a hyphen (-).
+    Description: S3 bucket name used to store media files
+    Default: mpa-media-storage
+    Type: String
+  MetadataTableName:
+    Description: The DynamoDB table name which stores file metadata
+    Type: String
+    Default: Metadata
+
+Resources:
+  MediaBucket:
+    Type: 'AWS::S3::Bucket'
+    DependsOn:
+      - ProcessingFileMetadataPermission
+    Properties:
+      BucketName: !Ref MediaBucketName
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: 's3:ObjectCreated:*'
+            Function: !GetAtt ProcessingFileMetadataLambdaFunction.Arn
+  ProcessingFileMetadataLambdaFunction:
+    Type: 'AWS::Lambda::Function'
+    DependsOn:
+      - ProcessingFileMetadataExecutionRole
+    Properties:
+      Code:
+        ZipFile: !Sub |
+          import boto3
+          import json
+          import logging
+          import os
+          import time
+          import urllib.parse as urllib
+          import uuid
+
+          METADATA_TABLE = os.environ.get("METADATA_TABLE")
+          dynamodb = boto3.resource('dynamodb')
+          metadata_table = dynamodb.Table(METADATA_TABLE)
+
+          def handler(event, context):
+              print('Received event %s' % json.dumps(event))
+              UUID = str(uuid.uuid4())
+              current_time = int(round(time.time() * 1000))
+              bucket_name = event['Records'][0]['s3']['bucket']['name']
+              object = event['Records'][0]['s3']['object']
+              object_key = urllib.unquote_plus(object['key'])
+              try:
+                  dynamodb_response = metadata_table.put_item(
+                      Item={
+                          "id": UUID,
+                          "objectUrl": f"s3://{bucket_name}/{object_key}",
+                          "objectETag": object['eTag'],
+                          "objectSize": object['size'],
+                          "createdTs": current_time
+                      }
+                  )
+                  response = {"statusCode": 200, "body": json.dumps(dynamodb_response)}
+              except Exception as e:
+                  logging.error('Exception: %s' % e, exc_info=True)
+                  response = {"statusCode": 500, "body": json.dumps(e)}
+
+              return response
+
+      Description: Store the metadata of created file object to DynamoDB table
+      Environment:
+        Variables:
+          METADATA_TABLE: !Ref MetadataTableName
+      Handler: index.handler
+      Runtime: python3.6
+      Role: !GetAtt ProcessingFileMetadataExecutionRole.Arn
+      MemorySize: 512
+      Timeout: 30
+  MetadataTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      TableName: !Ref MetadataTableName
+      AttributeDefinitions:
+        - AttributeName: objectUrl
+          AttributeType: S
+      KeySchema:
+        - AttributeName: objectUrl
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expiredAt
+        Enabled: true
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+  ProcessingFileMetadataPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref ProcessingFileMetadataLambdaFunction
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn: !Sub 'arn:aws:s3:::${MediaBucketName}'
+  ProcessingFileMetadataExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: ''
+            Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Path: /
+      Policies:
+        - PolicyName: !Sub 'ProcessingFileMetadataExecutionRole-${AWS::Region}'
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - 's3:GetObject'
+                  - 's3:GetObjectVersion'
+                  - 's3:GetBucketVersioning'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${MediaBucketName}'
+                  - !Sub 'arn:aws:s3:::${MediaBucketName}/*'
+                Effect: Allow
+              - Action:
+                  - 'dynamodb:PutItem'
+                Resource:
+                  - !GetAtt MetadataTable.Arn
+                Effect: Allow
+
+Outputs:
+  MediaBucketName:
+    Description: S3 bucket name which stores media files
+    Value: !Ref MediaBucket
+  MetadataTableName:
+    Description: DynamoDB table name which stores metadata of media files
+    Value: !Ref MetadataTable
