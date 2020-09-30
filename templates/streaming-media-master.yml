@@ -144,6 +144,13 @@ Resources:
           - S3Bucket: !If [UsingDefaultBucket, !Sub '${S3BucketName}-${AWS::Region}', !Ref S3BucketName]
       Parameters:
         BucketName: !Ref ArtifactBucket
+  MediaStorageStack:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL:
+        !Sub
+          - 'https://${S3Bucket}.s3.${AWS::URLSuffix}/${S3KeyPrefix}/templates/media-storage.yml'
+          - S3Bucket: !If [UsingDefaultBucket, !Sub '${S3BucketName}-${AWS::Region}', !Ref S3BucketName]
 
 Outputs:
   CodePipelineURL:
