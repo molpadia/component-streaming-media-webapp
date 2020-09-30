@@ -22,13 +22,6 @@ Resources:
     DependsOn:
       - S3CleanUpRole
     Properties:
-      Description: Empty S3 bucket
-      Handler: index.handler
-      Role: !GetAtt
-        - S3CleanUpRole
-        - Arn
-      Runtime: python2.7
-      Timeout: 240
       Code:
         ZipFile: !Join
           - |+
@@ -58,7 +51,7 @@ Resources:
             - '            print("bucket is already empty")'
             - ''
             - ''
-            - 'def delete_versionedobjects(bucket):'
+            - 'def delete_versioned_objects(bucket):'
             - '    print(''Collect data from %s'' % bucket)'
             - '    paginator = client.get_paginator(''list_object_versions'')'
             - '    result = paginator.paginate(Bucket=bucket)'
@@ -97,11 +90,11 @@ Resources:
             - '        dest_bucket = event[''ResourceProperties''][''DestBucket'']'
             - '        if event[''RequestType''] == ''Delete'':'
             - '            check_if_versioned = client.get_bucket_versioning(Bucket=dest_bucket)'
-            - '            print check_if_versioned'
+            - '            print(check_if_versioned)'
             - '            if ''Status'' in check_if_versioned:'
             - '                print check_if_versioned[''Status'']'
             - '                print("Delete a versioned Bucket")'
-            - '                delete_versionedobjects(dest_bucket)'
+            - '                delete_versioned_objects(dest_bucket)'
             - '            else:'
             - '                print("Delete a nonversioned Bucket")'
             - '                delete_nonversioned_objects(dest_bucket)'
@@ -114,6 +107,13 @@ Resources:
             - '        timer.cancel()'
             - '        cfnresponse.send(event, context, status, {}, None)'
             - ''
+      Description: Empty the S3 Bucket
+      Handler: index.handler
+      Role: !GetAtt
+        - S3CleanUpRole
+        - Arn
+      Runtime: python2.7
+      Timeout: 240
   S3CleanUpRole:
     Type: 'AWS::IAM::Role'
     Properties:
