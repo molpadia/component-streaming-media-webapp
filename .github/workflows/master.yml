@@ -21,4 +21,4 @@ jobs:
           name: streaming-media-webapp-prod
           template: templates/streaming-media-master.yml
           capabilities: CAPABILITY_NAMED_IAM,CAPABILITY_IAM
-          parameter-overrides: Environment=prod GitHubUser=molpadia GitHubRepoName=component-streaming-media-webapp SourceRepoBranch=develop ReleaseBranch=master GitHubOAuthToken=${{ secrets.OAUTH_TOKEN }}
+          parameter-overrides: Environment=prod,GitHubUser=molpadia,GitHubRepoName=component-streaming-media-webapp,GitHubOAuthToken=${{ secrets.OAUTH_TOKEN }},ReleaseBranch=master,SourceRepoBranch=develop,S3BucketName=${{ secrets.AWS_S3_BUCKET }}
