@@ -84,9 +84,6 @@ Metadata:
       S3KeyPrefix:
         default: S3 key prefix
 
-Conditions:
-  UsingDefaultBucket: !Equals [!Ref S3BucketName, 'aws-molpadia']
-
 Resources:
   ArtifactBucket:
     Type: 'AWS::S3::Bucket'
@@ -103,10 +100,7 @@ Resources:
     DependsOn:
       - ArtifactBucket
     Properties:
-      TemplateURL:
-        !Sub
-          - 'https://${S3Bucket}.s3.${AWS::URLSuffix}/${S3KeyPrefix}/templates/iam-roles.yml'
-          - S3Bucket: !If [UsingDefaultBucket, !Sub '${S3BucketName}-${AWS::Region}', !Ref S3BucketName]
+      TemplateURL: !Sub 'https://${S3BucketName}.s3.${AWS::URLSuffix}/${S3KeyPrefix}/templates/iam-roles.yml'
       Parameters:
         ArtifactBucket: !Ref ArtifactBucket
   CodePipelineStack:
@@ -115,10 +109,7 @@ Resources:
       - ArtifactBucket
       - IAMRoleStack
     Properties:
-      TemplateURL:
-        !Sub
-          - 'https://${S3Bucket}.s3.${AWS::URLSuffix}/${S3KeyPrefix}/templates/ci-pipeline.yml'
-          - S3Bucket: !If [UsingDefaultBucket, !Sub '${S3BucketName}-${AWS::Region}', !Ref S3BucketName]
+      TemplateURL: !Sub 'https://${S3BucketName}.s3.${AWS::URLSuffix}/${S3KeyPrefix}/templates/ci-pipeline.yml'
       Parameters:
         GitHubUser: !Ref GitHubUser
         GitHubRepoName: !Ref GitHubRepoName
@@ -126,31 +117,29 @@ Resources:
         ReleaseBranch: !Ref ReleaseBranch
         GitHubOAuthToken: !Ref GitHubOAuthToken
         ArtifactBucket: !Ref ArtifactBucket
-        # GitMergeLambda: !Ref GitMergeLambda
         CodePipelineRoleArn: !GetAtt
           - IAMRoleStack
           - Outputs.CodePipelineRoleArn
         CodeBuildRoleArn: !GetAtt
           - IAMRoleStack
           - Outputs.CodeBuildRoleArn
+        GitMergeRoleArn: !GetAtt
+          - IAMRoleStack
+          - Outputs.GitMergeRoleArn
   EmptyBucketLambdaStack:
     Type: 'AWS::CloudFormation::Stack'
     DependsOn:
       - ArtifactBucket
     Properties:
-      TemplateURL:
-        !Sub
-          - 'https://${S3Bucket}.s3.${AWS::URLSuffix}/${S3KeyPrefix}/templates/empty-bucket.yml'
-          - S3Bucket: !If [UsingDefaultBucket, !Sub '${S3BucketName}-${AWS::Region}', !Ref S3BucketName]
+      TemplateURL: !Sub 'https://${S3BucketName}.s3.${AWS::URLSuffix}/${S3KeyPrefix}/templates/empty-bucket.yml'
       Parameters:
         BucketName: !Ref ArtifactBucket
   MediaStorageStack:
     Type: 'AWS::CloudFormation::Stack'
+    DependsOn:
+      - ArtifactBucket
     Properties:
-      TemplateURL:
-        !Sub
-          - 'https://${S3Bucket}.s3.${AWS::URLSuffix}/${S3KeyPrefix}/templates/media-storage.yml'
-          - S3Bucket: !If [UsingDefaultBucket, !Sub '${S3BucketName}-${AWS::Region}', !Ref S3BucketName]
+      TemplateURL: !Sub 'https://${S3BucketName}.s3.${AWS::URLSuffix}/${S3KeyPrefix}/templates/media-storage.yml'
 
 Outputs:
   CodePipelineURL:
