@@ -127,6 +127,7 @@ Resources:
                 - apt-get update -y
                 - sudo apt-get install zip gzip tar -y
                 - pip3 install --upgrade pip
+                - pip3 install --upgrade awscli
                 - pip3 install taskcat==0.9.13
                 - ln -s /usr/local/bin/pip /usr/bin/pip
             pre_build:
@@ -142,7 +143,7 @@ Resources:
                 - git submodule init
                 - git submodule update --recursive
                 - ls -lR
-                - aws configure set default.region ap-northeast-1
+                - aws configure set default.region $AWS_REGION
             build:
               commands:
                 - echo Build $PROJECTNAME phase
