@@ -85,6 +85,54 @@ Resources:
                   - 'lambda:GetFunctionConfiguration'
                 Resource: '*'
                 Effect: Allow
+  GitMergeRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: GitMergeRolePolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource:
+                  - !Join
+                    - ''
+                    - - 'arn:aws:logs:'
+                      - !Ref 'AWS::Region'
+                      - ':'
+                      - !Ref 'AWS::AccountId'
+                      - ':log-group:/aws/lambda/*'
+              - Effect: Allow
+                Action:
+                  - 'codepipeline:GetPipeline'
+                  - 'codepipeline:GetPipelineExecution'
+                  - 'codepipeline:GetPipelineState'
+                  - 'codepipeline:ListPipelines'
+                  - 'codepipeline:ListPipelineExecutions'
+                Resource:
+                  - !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:*'
+              - Effect: Allow
+                Action:
+                  - 'codepipeline:GetJobDetails'
+                  - 'codepipeline:PutJobSuccessResult'
+                  - 'codepipeline:PutJobFailureResult'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                Resource: '*'
 
 Outputs:
   CodeBuildRoleArn:
@@ -96,4 +144,9 @@ Outputs:
     Description: Code Pipeline service role ARN
     Value: !GetAtt
       - CodePipelineServiceRole
+      - Arn
+  GitMergeRoleArn:
+    Description: GitHub merge service role ARN
+    Value: !GetAtt
+      - GitMergeRole
       - Arn

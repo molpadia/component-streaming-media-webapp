@@ -35,6 +35,9 @@ Parameters:
   CodePipelineRoleArn:
     Description: Code Pipeline service role ARN
     Type: String
+  GitMergeRoleArn:
+    Description: GitHub merge service role ARN
+    Type: String
 Resources:
   CodePipeline:
     Type: 'AWS::CodePipeline::Pipeline'
@@ -75,6 +78,19 @@ Resources:
               Configuration:
                 ProjectName: !Ref CodeBuild
               RunOrder: 2
+        - Name: Deploy
+          Actions:
+            - Name: GitMerge
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Version: '1'
+                Provider: Lambda
+              Configuration:
+                FunctionName: !Ref GitMergeLambda
+                UserParameters: !Sub >-
+                  {"baseBranch": "${ReleaseBranch}", "githubToken": "${GitHubOAuthToken}", "headBranch": "${SourceRepoBranch}", "owner": "${GitHubUser}", "repo": "${GitHubRepoName}"}
+              RunOrder: 3
   CodeBuild:
     Type: 'AWS::CodeBuild::Project'
     Properties:
@@ -148,6 +164,97 @@ Resources:
                 - echo Zip and upload report to $ARTIFACT_BUCKET S3 bucket
                 - zip -r taskcat_report.zip taskcat_outputs
                 - aws s3 cp taskcat_report.zip s3://$ARTIFACT_BUCKET/taskcat_reports/$CODEBUILD_BUILD_ID.zip
+  GitMergeLambda:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      Code:
+        ZipFile: !Join
+          - |+
+
+          - - import json
+            - import logger
+            - import requests
+            - import os
+            - import boto3
+            - ''
+            - 'region = os.envion[''AWS_REGION'']'
+            - 'merge_endpoint = ''https://api.github.com/repos/{owner}/{repo}/merges'''
+            - 'code_pipeline = boto3.client(''codepipeline'', region_name=region)'
+            - ''
+            - ''
+            - 'def put_job_success(job, message):'
+            - '    logger.info(''Putting job success'')'
+            - '    logger.info(message)'
+            - '    code_pipeline.put_job_success_result(jobId=job)'
+            - ''
+            - 'def put_job_failure(job, message):'
+            - '    logger.info(''Putting job failure'')'
+            - '    logger.info(message)'
+            - '    code_pipeline.put_job_failure_result(jobId=job, failureDetails={''message'': message, ''type'': ''JobFailed''})'
+            - ''
+            - 'def get_user_params(job_data):'
+            - '    try:'
+            - '        user_parameters = job_data[''actionConfiguration''][''configuration''][''UserParameters'']'
+            - '        decoded_parameters = json.loads(user_parameters)'
+            - '    except Exception as e:'
+            - '        raise Exception(''UserParameters could not be decoded as JSON'')'
+            - ''
+            - '    if ''baseBranch'' not in decoded_parameters:'
+            - '        raise Exception(''UserParameters JSON must include the base branch name'')'
+            - ''
+            - '    if ''githubToken'' not in decoded_parameters:'
+            - '        raise Exception(''UserParameters JSON must include the repo GitHub token'')'
+            - ''
+            - '    if ''headBranch'' not in decoded_parameters:'
+            - '        raise Exception(''UserParameters JSON must include the head branch name'')'
+            - ''
+            - '    if ''owner'' not in decoded_parameters:'
+            - '        raise Exception(''UserParameters JSON must include the repo owner'')'
+            - ''
+            - '    if ''repo'' not in decoded_parameters:'
+            - '        raise Exception(''UserParameters JSON must include the repo name'')'
+            - ''
+            - '    return decoded_parameters'
+            - ''
+            - 'def handler(event, context):'
+            - '    print(''Received event: %s'' % json.dumps(event))'
+            - '    job_id = event[''CodePipeline.job''][''id'']'
+            - '    job_data = event[''CodePipeline.job''][''data'']'
+            - '    params = get_user_params(job_data)'
+            - '    global merge_endpoint'
+            - '    merge_endpoint = merge_endpoint.format(owner=params[''owner''], repo=params[''repo_name''])'
+            - ''
+            - '    # Construct post data and headers'
+            - '    data = {''base'': params[''baseBranch''], ''head'': params[''headBranch'']}'
+            - '    headers = {''Content-Type'': ''application/json'', ''Authorization'': ''token  %s'' % params[''githubToken'']}'
+            - ''
+            - '    try:'
+            - '        # Submit request'
+            - '        result = requests.post(merge_endpoint, data=json.dumps(data), headers=headers)'
+            - '        logger.debug(result)'
+            - ''
+            - '        if result.status_code == requests.codes.created:'
+            - '            logger.info(''Merge completed successfully'')'
+            - '            put_job_success(job_id, ''Merge complete !'')'
+            - '        elif result.status_code == requests.codes.no_content:'
+            - '            logger.info(''Nothing to merge !'')'
+            - '            put_job_success(job_id, ''Nothing to merge !'')'
+            - '        else:'
+            - '            logger.error(str(result.raise_for_status()))'
+            - '            put_job_failure(job_id, ''Merge failed: %s'' % status)'
+            - ''
+            - '    except Exception as e:'
+            - '        logger.error(''Function failed due to exception, exception: %s'' % e)'
+            - '        put_job_failure(job_id, ''Exception: %s'' % e)'
+            - ''
+            - '    logger.info(''GitHub merge execution complete !'')'
+            - '    return True'
+            - ''
+      Description: Merge GitHub branches
+      Handler: index.handler
+      Role: !Ref GitMergeRoleArn
+      Runtime: python3.6
+      Timeout: 30
 
 Outputs:
   CodePipelineName:
