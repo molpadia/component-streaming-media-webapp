@@ -134,7 +134,6 @@ Resources:
                 - echo Pre-build $PROJECTNAME phase
                 - echo Current Directory is $CODEBUILD_SRC_DIR
                 - ls -al
-                - cd $PROJECTNAME
                 - git config --global url."https://github.com/".insteadOf "git@github.com:"
                 - git init
                 - git remote add origin https://$GITHUBTOKEN@github.com/$GITHUBUSER/$PROJECTNAME.git
@@ -143,7 +142,6 @@ Resources:
                 - git submodule init
                 - git submodule update --recursive
                 - ls -lR
-                - cd -
                 - aws configure set default.region ap-northeast-1
             build:
               commands:
