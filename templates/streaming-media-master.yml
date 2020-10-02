@@ -85,6 +85,9 @@ Metadata:
       - Label:
           default: AWS Configuration
         Parameters:
+          - Environment
+          - MediaBucketName
+          - MetadataTableName
           - S3BucketName
           - S3BucketRegion
           - S3KeyPrefix
@@ -105,6 +108,12 @@ Metadata:
         default: S3 bucket region
       S3KeyPrefix:
         default: S3 key prefix
+      Environment:
+        default: AWS environment name
+      MediaBucketName:
+        default: S3 bucket name stores media files
+      MetadataTableName:
+        default: DynamoDB table name stores metadata
 
 Resources:
   ArtifactBucket:
