@@ -120,7 +120,7 @@ Resources:
         BuildSpec: !Sub |
           version: 0.2
 
-          phase:
+          phases:
             install:
               commands:
                 - echo Setup $PROJECTNAME phase
@@ -172,7 +172,7 @@ Resources:
           - |+
 
           - - import json
-            - import logger
+            - import logging
             - import requests
             - import os
             - import boto3
@@ -183,13 +183,13 @@ Resources:
             - ''
             - ''
             - 'def put_job_success(job, message):'
-            - '    logger.info(''Putting job success'')'
-            - '    logger.info(message)'
+            - '    logging.info(''Putting job success'')'
+            - '    logging.info(message)'
             - '    code_pipeline.put_job_success_result(jobId=job)'
             - ''
             - 'def put_job_failure(job, message):'
-            - '    logger.info(''Putting job failure'')'
-            - '    logger.info(message)'
+            - '    logging.info(''Putting job failure'')'
+            - '    logging.info(message)'
             - '    code_pipeline.put_job_failure_result(jobId=job, failureDetails={''message'': message, ''type'': ''JobFailed''})'
             - ''
             - 'def get_user_params(job_data):'
@@ -231,23 +231,23 @@ Resources:
             - '    try:'
             - '        # Submit request'
             - '        result = requests.post(merge_endpoint, data=json.dumps(data), headers=headers)'
-            - '        logger.debug(result)'
+            - '        logging.debug(result)'
             - ''
             - '        if result.status_code == requests.codes.created:'
-            - '            logger.info(''Merge completed successfully'')'
+            - '            logging.info(''Merge completed successfully'')'
             - '            put_job_success(job_id, ''Merge complete !'')'
             - '        elif result.status_code == requests.codes.no_content:'
-            - '            logger.info(''Nothing to merge !'')'
+            - '            logging.info(''Nothing to merge !'')'
             - '            put_job_success(job_id, ''Nothing to merge !'')'
             - '        else:'
-            - '            logger.error(str(result.raise_for_status()))'
+            - '            logging.error(str(result.raise_for_status()))'
             - '            put_job_failure(job_id, ''Merge failed: %s'' % status)'
             - ''
             - '    except Exception as e:'
-            - '        logger.error(''Function failed due to exception, exception: %s'' % e)'
+            - '        logging.error(''Function failed due to exception, exception: %s'' % e)'
             - '        put_job_failure(job_id, ''Exception: %s'' % e)'
             - ''
-            - '    logger.info(''GitHub merge execution complete !'')'
+            - '    logging.info(''GitHub merge execution complete !'')'
             - '    return True'
             - ''
       Description: Merge GitHub branches

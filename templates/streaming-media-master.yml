@@ -23,6 +23,28 @@ Parameters:
       https://github.com/settings/tokens
     Type: String
     NoEcho: 'true'
+  Environment:
+    AllowedValues:
+      - dev
+      - beta
+      - prod
+    Default: dev
+    Description: >-
+      Enter the CloudFormation stack environment name for AWS infrastructure
+      (Constraint: dev|beta|prod, Default: dev)
+    Type: String
+  MediaBucketName:
+    AllowedPattern: '^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$'
+    ConstraintDescription: >-
+      S3 bucket name can include numbers, lowercase letters, uppercase
+      letters, and hyphens (-). It cannot start or end with a hyphen (-).
+    Description: S3 bucket name used to store media files
+    Default: mpa-media-storage
+    Type: String
+  MetadataTableName:
+    Description: The DynamoDB table name which stores file metadata
+    Type: String
+    Default: Metadata
   S3BucketName:
     AllowedPattern: '^[0-9a-zA-Z]+([0-9a-zA-Z-]*[0-9a-zA-Z])*$'
     ConstraintDescription: >-
@@ -140,6 +162,9 @@ Resources:
       - ArtifactBucket
     Properties:
       TemplateURL: !Sub 'https://${S3BucketName}.s3.${AWS::URLSuffix}/${S3KeyPrefix}/templates/media-storage.yml'
+      Parameters:
+        MediaBucketName: !Sub '${MediaBucketName}-${Environment}'
+        MetadataTableName: !Sub '${MetadataTableName}-${Environment}'
 
 Outputs:
   CodePipelineURL:
