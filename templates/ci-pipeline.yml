@@ -127,7 +127,7 @@ Resources:
                 - apt-get update -y
                 - sudo apt-get install zip gzip tar -y
                 - pip3 install --upgrade pip
-                - pip3 install --user awscli --use-feature=2020-resolver
+                - pip3 install --upgrade --user awscli
                 - pip3 install taskcat==0.9.13
                 - ln -s /usr/local/bin/pip /usr/bin/pip
             pre_build:
