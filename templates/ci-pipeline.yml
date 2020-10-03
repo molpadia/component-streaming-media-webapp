@@ -175,7 +175,7 @@ Resources:
             - import boto3
             - from botocore.vendored import requests
             - ''
-            - 'region = os.envion[''AWS_REGION'']'
+            - 'region = os.environ[''AWS_REGION'']'
             - 'merge_endpoint = ''https://api.github.com/repos/{owner}/{repo}/merges'''
             - 'code_pipeline = boto3.client(''codepipeline'', region_name=region)'
             - ''
